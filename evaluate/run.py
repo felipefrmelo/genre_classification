@@ -30,11 +30,13 @@ def go(args):
 
     pipe = mlflow.sklearn.load_model(model_export_path)
 
-    used_columns = list(itertools.chain.from_iterable([x[2] for x in pipe['preprocessor'].transformers]))
+    used_columns = list(itertools.chain.from_iterable(
+        [x[2] for x in pipe['preprocessor'].transformers]))
     pred_proba = pipe.predict_proba(X_test[used_columns])
 
     logger.info("Scoring")
-    score = roc_auc_score(y_test, pred_proba, average="macro", multi_class="ovo")
+    score = roc_auc_score(y_test, pred_proba,
+                          average="macro", multi_class="ovo")
 
     run.summary["AUC"] = score
 

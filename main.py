@@ -15,19 +15,22 @@ def go(config: DictConfig):
     # You can get the path at the root of the MLflow project with this:
     root_path = hydra.utils.get_original_cwd()
 
+    def make_path(path):
+        return os.path.join(root_path, path)
+
+    print(type(config['main']['execute_steps']))
     # Check which steps we need to execute
     if isinstance(config["main"]["execute_steps"], str):
         # This was passed on the command line as a comma-separated list of steps
         steps_to_execute = config["main"]["execute_steps"].split(",")
     else:
-        assert isinstance(config["main"]["execute_steps"], list)
-        steps_to_execute = config["main"]["execute_steps"]
+        steps_to_execute = list(config["main"]["execute_steps"])
 
     # Download step
-    if "download" in steps_to_execute:
-
+    if 'download' in steps_to_execute:
+        print("Downloading data")
         _ = mlflow.run(
-            os.path.join(root_path, "download"),
+            make_path("download"),
             "main",
             parameters={
                 "file_url": config["data"]["file_url"],
@@ -38,20 +41,37 @@ def go(config: DictConfig):
         )
 
     if "preprocess" in steps_to_execute:
-
-        ## YOUR CODE HERE: call the preprocess step
-        pass
+        mlflow.run(
+            make_path("preprocess"),
+            "main",
+            parameters={
+                'input_artifact': 'raw_data.parquet:latest',
+                'artifact_name': 'preprocessed_data.csv',
+                'artifact_type': 'preprocessed_data',
+                'artifact_description': 'Data as preprocessed'}
+        )
 
     if "check_data" in steps_to_execute:
-
-        ## YOUR CODE HERE: call the check_data step
-        pass
+        mlflow.run(
+            make_path("check_data"),
+            "main",
+            parameters={
+                'reference_artifact': config["data"]["reference_dataset"],
+                'sample_artifact': 'preprocessed_data.csv:latest',
+                'ks_alpha': config["data"]["ks_alpha"]})
 
     if "segregate" in steps_to_execute:
 
-        ## YOUR CODE HERE: call the segregate step
-        pass
-
+        mlflow.run(
+            make_path("segregate"),
+            "main",
+            parameters={
+                'input_artifact': 'preprocessed_data.csv:latest',
+                'artifact_type': 'segregated_data',
+                'artifact_root': 'data',
+                'test_size': config["data"]["test_size"],
+                'stratify': config["data"]["stratify"]}
+        )
     if "random_forest" in steps_to_execute:
 
         # Serialize decision tree configuration
@@ -60,13 +80,26 @@ def go(config: DictConfig):
         with open(model_config, "w+") as fp:
             fp.write(OmegaConf.to_yaml(config["random_forest_pipeline"]))
 
-        ## YOUR CODE HERE: call the random_forest step
-        pass
-
+        mlflow.run(
+            make_path("random_forest"),
+            "main",
+            parameters={
+                'train_data': 'data_train.csv:latest',
+                'val_size': config['data']['val_size'],
+                'stratify': config["data"]["stratify"],
+                'export_artifact': 'random_forest_model',
+                'model_config': model_config}
+        )
     if "evaluate" in steps_to_execute:
 
-        ## YOUR CODE HERE: call the evaluate step
-        pass
+        mlflow.run(
+            make_path("evaluate"),
+            "main",
+            parameters={
+                'model_export': 'random_forest_model:latest',
+                'test_data': 'data_test.csv:latest',
+            }
+        )
 
 
 if __name__ == "__main__":
